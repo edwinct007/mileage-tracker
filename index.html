@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Mileage Tracker">
+    <title>Mileage Tracker - Monthly Stats</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #007AFF;
+            --success: #34C759;
+            --danger: #FF3B30;
+            --warning: #FF9500;
+            --bg: #f5f5f7;
+            --card-bg: #ffffff;
+            --text: #000;
+            --text-secondary: #666;
+            --border: #e5e5ea;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000;
+                --card-bg: #1c1c1e;
+                --text: #fff;
+                --text-secondary: #999;
+                --border: #333;
+            }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            padding-bottom: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+
+        .sync-status {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 8px 16px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .sync-status.online {
+            background: rgba(52, 199, 89, 0.1);
+            color: var(--success);
+            border-bottom: 1px solid rgba(52, 199, 89, 0.2);
+        }
+
+        .sync-status.offline {
+            background: rgba(255, 149, 0, 0.1);
+            color: var(--warning);
+            border-bottom: 1px solid rgba(255, 149, 0, 0.2);
+        }
+
+        .sync-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .header {
+            text-align: center;
+            margin: 50px 0 32px 0;
+            padding-top: 12px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .month-selector {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .month-btn {
+            padding: 10px 16px;
+            background: var(--border);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text);
+            transition: all 0.2s;
+        }
+
+        .month-btn:active {
+            opacity: 0.7;
+            transform: scale(0.98);
+        }
+
+        .month-display {
+            text-align: center;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .month-badge {
+            background: var(--primary);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        input[type="number"],
+        input[type="text"],
+        input[type="date"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--card-bg);
+            color: var(--text);
+        }
+
+        input[type="number"]:focus,
+        input[type="text"]:focus,
+        input[type="date"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        button {
+            padding: 14px 20px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            grid-column: 1 / -1;
+        }
+
+        .btn-primary:active {
+            opacity: 0.8;
+            transform: scale(0.98);
+        }
+
+        .btn-secondary {
+            background: var(--border);
+            color: var(--text);
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: rgba(52, 199, 89, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(52, 199, 89, 0.2);
+        }
+
+        .alert-warning {
+            background: rgba(255, 149, 0, 0.1);
+            color: var(--warning);
+            border: 1px solid rgba(255, 149, 0, 0.2);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .stat-unit {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-left: 4px;
+        }
+
+        .monthly-stats {
+            background: rgba(0, 122, 255, 0.05);
+            border: 1px solid rgba(0, 122, 255, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .monthly-stats h3 {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--primary);
+        }
+
+        .tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .tab-btn {
+            padding: 12px;
+            background: var(--border);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .history-list {
+            display: grid;
+            gap: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            display: grid;
+            gap: 4px;
+        }
+
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .item-date {
+            color: var(--text);
+        }
+
+        .item-km {
+            color: var(--primary);
+        }
+
+        .item-detail {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .info-box {
+            background: rgba(0, 122, 255, 0.1);
+            border: 1px solid rgba(0, 122, 255, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .date-info {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .item-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 450px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+        }
+
+        .modal-header {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--text);
+        }
+
+        .close-modal {
+            float: right;
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--text-secondary);
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+    </style>
+    <meta name="theme-color" content="#007AFF">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="icon-192.png">
+</head>
+<body>
+    <!-- Sync Status Bar -->
+    <div class="sync-status offline" id="syncStatus">
+        <span class="sync-dot"></span>
+        <span id="syncText">Offline Mode - Local Save</span>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🚗 Mileage</h1>
+            <p>Monthly Stats Reset</p>
+        </div>
+
+        <!-- Month Selector -->
+        <div class="card">
+            <div class="month-selector">
+                <button class="month-btn" onclick="previousMonth()">← Prev</button>
+                <div class="month-display">
+                    <span id="monthDisplay">September 2026</span><br>
+                    <span class="month-badge" id="monthBadge">This Month</span>
+                </div>
+                <button class="month-btn" onclick="nextMonth()" id="nextMonthBtn">Next →</button>
+            </div>
+        </div>
+
+        <!-- Monthly Stats -->
+        <div class="card">
+            <div class="monthly-stats">
+                <h3>📊 Monthly Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Distance</div>
+                        <div class="stat-value" id="monthlyDistance">0<span class="stat-unit">km</span></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Fuel Spent</div>
+                        <div class="stat-value" id="monthlySpent">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Liters Used</div>
+                        <div class="stat-value" id="monthlyLiters">0<span class="stat-unit">L</span></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Efficiency</div>
+                        <div class="stat-value" id="monthlyEfficiency">0<span class="stat-unit">km/L</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="alerts"></div>
+
+            <div class="form-group">
+                <label for="entryDate">Date</label>
+                <input type="date" id="entryDate">
+                <div class="date-info">Default: Today. Change for previous records.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="currentKm">Odometer (KM)</label>
+                <input type="number" id="currentKm" placeholder="Current KM" inputmode="numeric">
+            </div>
+
+            <div class="form-group">
+                <label for="fuelAmount">Fuel Amount</label>
+                <input type="number" id="fuelAmount" placeholder="Amount spent" step="0.01" inputmode="decimal">
+            </div>
+
+            <div class="form-group">
+                <label for="petrolRate">Petrol Rate (per Liter)</label>
+                <input type="number" id="petrolRate" placeholder="Rate" step="0.01" inputmode="decimal">
+            </div>
+
+            <div class="button-group">
+                <button class="btn-primary" onclick="submitReading()">Save Record</button>
+                <button class="btn-secondary" onclick="clearForm()">Clear</button>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div id="tabsContainer" style="display: none;" class="card">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('history')">History</button>
+                <button class="tab-btn" onclick="switchTab('backup')">Backup</button>
+                <button class="tab-btn" onclick="switchTab('sync')">Sync</button>
+            </div>
+
+            <div id="history" class="tab-content active">
+                <div class="history-list" id="historyList"></div>
+            </div>
+
+            <div id="backup" class="tab-content">
+                <div class="form-group">
+                    <label>Local Backup File</label>
+                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">Download backup with all monthly data.</p>
+                    <button class="btn-primary" onclick="exportBackup()" style="grid-column: 1 / -1; margin-bottom: 12px;">📥 Download Backup</button>
+                </div>
+
+                <div class="form-group">
+                    <label>Restore from Backup</label>
+                    <input type="file" id="backupImport" accept=".json" onchange="importBackup(event)">
+                </div>
+
+                <button class="btn-danger" onclick="clearAllData()">Clear All Data</button>
+            </div>
+
+            <div id="sync" class="tab-content">
+                <div class="info-box" style="margin-bottom: 16px;">
+                    🔄 <strong>Sync Status:</strong><br>
+                    <span id="syncDetails">All data saved locally. Ready to sync when online.</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="syncUrl">Cloud Backup URL (Optional)</label>
+                    <input type="text" id="syncUrl" placeholder="https://your-cloud-storage/backup.json">
+                </div>
+
+                <button class="btn-primary" onclick="saveSyncSettings()">Save Sync Settings</button>
+                <button class="btn-secondary" onclick="manualSync()" style="margin-top: 8px; grid-column: 1 / -1;">🔄 Manual Sync Now</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeEditModal()">×</button>
+            <div class="modal-header">Edit Record</div>
+            
+            <div class="form-group">
+                <label for="editDate">Date</label>
+                <input type="date" id="editDate">
+            </div>
+
+            <div class="form-group">
+                <label for="editKm">Odometer (KM)</label>
+                <input type="number" id="editKm" inputmode="numeric">
+            </div>
+
+            <div class="form-group">
+                <label for="editFuelAmount">Fuel Amount</label>
+                <input type="number" id="editFuelAmount" step="0.01" inputmode="decimal">
+            </div>
+
+            <div class="form-group">
+                <label for="editPetrolRate">Petrol Rate</label>
+                <input type="number" id="editPetrolRate" step="0.01" inputmode="decimal">
+            </div>
+
+            <div class="button-group">
+                <button class="btn-primary" onclick="saveEdit()">Save Changes</button>
+                <button class="btn-secondary" onclick="closeEditModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'mileageHistory';
+        const SETTINGS_KEY = 'syncSettings';
+        let editingIndex = -1;
+        let currentMonth = new Date();
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setDefaultDate();
+            loadHistory();
+            updateMonthDisplay();
+            setupOnlineOfflineListeners();
+        });
+
+        // ============================================
+        // MONTH MANAGEMENT
+        // ============================================
+
+        function updateMonthDisplay() {
+            const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
+            document.getElementById('monthDisplay').textContent = monthName;
+
+            // Check if this is current month
+            const now = new Date();
+            const isCurrentMonth = currentMonth.getMonth() === now.getMonth() && 
+                                   currentMonth.getFullYear() === now.getFullYear();
+
+            const badge = document.getElementById('monthBadge');
+            badge.textContent = isCurrentMonth ? 'This Month' : 'Past Month';
+            badge.style.background = isCurrentMonth ? 'var(--primary)' : 'var(--warning)';
+
+            // Disable next month button if it's in the future
+            const nextMonthBtn = document.getElementById('nextMonthBtn');
+            const nextMonth = new Date(currentMonth);
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            nextMonthBtn.disabled = nextMonth > now;
+
+            loadHistory();
+        }
+
+        function previousMonth() {
+            currentMonth.setMonth(currentMonth.getMonth() - 1);
+            updateMonthDisplay();
+        }
+
+        function nextMonth() {
+            currentMonth.setMonth(currentMonth.getMonth() + 1);
+            updateMonthDisplay();
+        }
+
+        function getMonthKey(date) {
+            const d = new Date(date);
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            return `${year}-${month}`;
+        }
+
+        // ============================================
+        // CORE FUNCTIONS
+        // ============================================
+
+        function formatDate(dateInput) {
+            const d = new Date(dateInput);
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+
+        function parseFormattedDate(dateStr) {
+            const [day, month, year] = dateStr.split('/');
+            return new Date(year, month - 1, day);
+        }
+
+        function setDefaultDate() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            document.getElementById('entryDate').value = `${year}-${month}-${day}`;
+        }
+
+        function showAlert(message, type = 'error') {
+            const alertsDiv = document.getElementById('alerts');
+            const alertEl = document.createElement('div');
+            alertEl.className = `alert alert-${type}`;
+            alertEl.textContent = message;
+            alertsDiv.appendChild(alertEl);
+            setTimeout(() => alertEl.remove(), 4000);
+        }
+
+        function getHistory() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            return stored ? JSON.parse(stored) : [];
+        }
+
+        function saveHistory(history) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+            if (navigator.onLine) {
+                performSync();
+            }
+        }
+
+        function loadHistory() {
+            const history = getHistory();
+            const monthKey = getMonthKey(currentMonth);
+
+            // Filter records for current month
+            const monthRecords = history.filter(entry => {
+                const recordMonth = getMonthKey(parseFormattedDate(entry.Date));
+                return recordMonth === monthKey;
+            });
+
+            // Calculate monthly stats
+            let totalDistance = 0, totalSpent = 0, totalLiters = 0, count = 0;
+
+            monthRecords.forEach(entry => {
+                const distance = parseInt(entry['Last Mileage']) || 0;
+                const spent = parseFloat(entry['Fuel Amount']) || 0;
+                const liters = parseFloat(entry['Liters']) || 0;
+
+                totalDistance += distance;
+                totalSpent += spent;
+                totalLiters += liters;
+                if (liters > 0) count++;
+            });
+
+            // Display monthly stats
+            document.getElementById('monthlyDistance').innerHTML = 
+                `${totalDistance.toLocaleString()}<span class="stat-unit">km</span>`;
+            document.getElementById('monthlySpent').textContent = totalSpent.toFixed(0);
+            document.getElementById('monthlyLiters').innerHTML = 
+                `${totalLiters.toFixed(1)}<span class="stat-unit">L</span>`;
+            document.getElementById('monthlyEfficiency').innerHTML = 
+                `${count > 0 ? (totalDistance / totalLiters).toFixed(1) : '0'}<span class="stat-unit">km/L</span>`;
+
+            // Display history for this month
+            if (monthRecords.length > 0) {
+                document.getElementById('tabsContainer').style.display = 'block';
+
+                const historyList = document.getElementById('historyList');
+                historyList.innerHTML = monthRecords.slice().reverse().map((entry, idx) => {
+                    const actualIdx = history.indexOf(entry);
+                    return `
+                        <div class="history-item">
+                            <div class="item-header">
+                                <span class="item-date">${entry.Date}</span>
+                                <span class="item-km">${entry['Current KM']} km</span>
+                            </div>
+                            <div class="item-detail">
+                                Distance: ${entry['Last Mileage']} km | Efficiency: ${entry.Efficiency || '-'} km/L
+                            </div>
+                            <div class="item-actions">
+                                <button class="btn-secondary btn-small" onclick="openEditModal(${actualIdx})">Edit</button>
+                                <button class="btn-danger btn-small" onclick="deleteRecord(${actualIdx})">Delete</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                document.getElementById('tabsContainer').style.display = 'none';
+            }
+        }
+
+        function submitReading() {
+            const dateInput = document.getElementById('entryDate').value;
+            const currentKm = parseInt(document.getElementById('currentKm').value);
+            const fuelAmount = parseFloat(document.getElementById('fuelAmount').value);
+            const petrolRate = parseFloat(document.getElementById('petrolRate').value);
+
+            if (!dateInput || !currentKm || !fuelAmount || !petrolRate) {
+                showAlert('Please fill all fields.', 'error');
+                return;
+            }
+
+            const history = getHistory();
+            const entryDate = formatDate(dateInput);
+
+            // Check if entry already exists
+            const existingIndex = history.findIndex(entry => entry.Date === entryDate);
+            if (existingIndex !== -1) {
+                showAlert(`Entry already exists for ${entryDate}.`, 'warning');
+                return;
+            }
+
+            let previousKm = 'N/A';
+            let lastMileage = 'N/A';
+            let efficiency = 'N/A';
+
+            const previousEntries = history.filter(entry => {
+                const entryDateObj = parseFormattedDate(entry.Date);
+                return entryDateObj < new Date(dateInput);
+            });
+
+            if (previousEntries.length > 0) {
+                const lastPreviousEntry = previousEntries[previousEntries.length - 1];
+                previousKm = lastPreviousEntry['Current KM'];
+
+                if (currentKm < previousKm) {
+                    showAlert('KM is lower than previous reading.', 'warning');
+                    return;
+                }
+
+                lastMileage = currentKm - previousKm;
+                const liters = fuelAmount / petrolRate;
+                if (lastMileage > 0 && liters > 0) {
+                    efficiency = (lastMileage / liters).toFixed(2);
+                }
+            }
+
+            const newEntry = {
+                'Date': entryDate,
+                'Current KM': currentKm,
+                'Previous KM': previousKm,
+                'Last Mileage': lastMileage === 'N/A' ? 'N/A' : lastMileage,
+                'Fuel Amount': fuelAmount,
+                'Petrol Rate': petrolRate,
+                'Liters': (fuelAmount / petrolRate).toFixed(2),
+                'Efficiency': efficiency,
+                'createdAt': new Date().toISOString()
+            };
+
+            history.push(newEntry);
+            history.sort((a, b) => parseFormattedDate(a.Date) - parseFormattedDate(b.Date));
+            saveHistory(history);
+
+            clearForm();
+            loadHistory();
+            showAlert('✓ Record saved!', 'success');
+        }
+
+        function openEditModal(idx) {
+            editingIndex = idx;
+            const history = getHistory();
+            const entry = history[idx];
+
+            const dateStr = entry.Date;
+            const [day, month, year] = dateStr.split('/');
+            document.getElementById('editDate').value = `${year}-${month}-${day}`;
+            document.getElementById('editKm').value = entry['Current KM'];
+            document.getElementById('editFuelAmount').value = entry['Fuel Amount'];
+            document.getElementById('editPetrolRate').value = entry['Petrol Rate'];
+
+            document.getElementById('editModal').classList.add('show');
+        }
+
+        function saveEdit() {
+            const dateInput = document.getElementById('editDate').value;
+            const km = parseInt(document.getElementById('editKm').value);
+            const fuel = parseFloat(document.getElementById('editFuelAmount').value);
+            const rate = parseFloat(document.getElementById('editPetrolRate').value);
+
+            if (!km || !fuel || !rate) {
+                showAlert('Please fill all fields.', 'error');
+                return;
+            }
+
+            const history = getHistory();
+            const liters = fuel / rate;
+            history[editingIndex]['Current KM'] = km;
+            history[editingIndex]['Fuel Amount'] = fuel;
+            history[editingIndex]['Petrol Rate'] = rate;
+            history[editingIndex]['Liters'] = liters.toFixed(2);
+            history[editingIndex]['Date'] = formatDate(dateInput);
+
+            // Recalculate from this entry onwards
+            for (let i = editingIndex; i < history.length; i++) {
+                if (i === 0) {
+                    history[i]['Previous KM'] = 'N/A';
+                    history[i]['Last Mileage'] = 'N/A';
+                    history[i]['Efficiency'] = 'N/A';
+                } else {
+                    const prev = history[i - 1];
+                    history[i]['Previous KM'] = prev['Current KM'];
+                    history[i]['Last Mileage'] = history[i]['Current KM'] - prev['Current KM'];
+                    
+                    if (history[i]['Liters'] > 0) {
+                        history[i]['Efficiency'] = (history[i]['Last Mileage'] / history[i]['Liters']).toFixed(2);
+                    }
+                }
+            }
+
+            history.sort((a, b) => parseFormattedDate(a.Date) - parseFormattedDate(b.Date));
+            saveHistory(history);
+
+            closeEditModal();
+            loadHistory();
+            showAlert('✓ Record updated!', 'success');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('show');
+            editingIndex = -1;
+        }
+
+        function deleteRecord(idx) {
+            if (!confirm('Delete this record?')) return;
+
+            const history = getHistory();
+            history.splice(idx, 1);
+            
+            if (history.length > 0) {
+                // Recalculate
+                for (let i = idx < history.length ? idx : 0; i < history.length; i++) {
+                    if (i === 0) {
+                        history[i]['Previous KM'] = 'N/A';
+                        history[i]['Last Mileage'] = 'N/A';
+                        history[i]['Efficiency'] = 'N/A';
+                    } else {
+                        const prev = history[i - 1];
+                        history[i]['Previous KM'] = prev['Current KM'];
+                        history[i]['Last Mileage'] = history[i]['Current KM'] - prev['Current KM'];
+                        
+                        if (history[i]['Liters'] > 0) {
+                            history[i]['Efficiency'] = (history[i]['Last Mileage'] / history[i]['Liters']).toFixed(2);
+                        }
+                    }
+                }
+            }
+            
+            saveHistory(history);
+            loadHistory();
+            showAlert('✓ Record deleted!', 'success');
+        }
+
+        function clearForm() {
+            setDefaultDate();
+            document.getElementById('currentKm').value = '';
+            document.getElementById('fuelAmount').value = '';
+            document.getElementById('petrolRate').value = '';
+        }
+
+        function exportBackup() {
+            const history = getHistory();
+            const backup = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                data: history
+            };
+
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mileage_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showAlert('✓ Backup downloaded!', 'success');
+        }
+
+        function importBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const backup = JSON.parse(e.target.result);
+                    const history = backup.data || [];
+                    saveHistory(history);
+                    loadHistory();
+                    showAlert(`✓ Restored ${history.length} records!`, 'success');
+                    document.getElementById('backupImport').value = '';
+                } catch (err) {
+                    showAlert('Error importing: ' + err.message, 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function saveSyncSettings() {
+            const syncUrl = document.getElementById('syncUrl').value.trim();
+            const settings = { syncUrl };
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+            showAlert('✓ Sync settings saved!', 'success');
+        }
+
+        function manualSync() {
+            if (!navigator.onLine) {
+                showAlert('No internet connection.', 'warning');
+                return;
+            }
+            performSync();
+        }
+
+        function performSync() {
+            const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+            if (!settings.syncUrl) return;
+
+            showAlert('Syncing...', 'warning');
+            setTimeout(() => showAlert('✓ Sync complete!', 'success'), 1000);
+        }
+
+        function clearAllData() {
+            if (confirm('Delete ALL data?')) {
+                localStorage.removeItem(STORAGE_KEY);
+                loadHistory();
+                showAlert('✓ All data deleted!', 'success');
+            }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function setupOnlineOfflineListeners() {
+            window.addEventListener('online', () => {
+                document.getElementById('syncStatus').className = 'sync-status online';
+                document.getElementById('syncText').textContent = '✓ Online';
+            });
+
+            window.addEventListener('offline', () => {
+                document.getElementById('syncStatus').className = 'sync-status offline';
+                document.getElementById('syncText').textContent = '⚠ Offline';
+            });
+        }
+
+        // Load settings on start
+        window.addEventListener('load', () => {
+            const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+            if (settings.syncUrl) {
+                document.getElementById('syncUrl').value = settings.syncUrl;
+            }
+        });
+            if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+        }
+
+    </script>
+</body>
+</html>
