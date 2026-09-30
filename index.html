@@ -6,7 +6,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Mileage Tracker">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <title>Mileage Tracker - Monthly Stats</title>
+    <link rel="manifest" href="manifest.webmanifest">
     <style>
         * {
             margin: 0;
@@ -355,6 +357,38 @@
             color: var(--text-secondary);
         }
 
+        .readonly-field {
+            background: var(--bg) !important;
+            color: var(--text-secondary) !important;
+            cursor: not-allowed;
+        }
+
+        .calculation-box {
+            background: rgba(52, 199, 89, 0.08);
+            border: 1px solid rgba(52, 199, 89, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+
+        .calculation-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 4px 0;
+            font-size: 14px;
+        }
+
+        .calculation-row strong {
+            color: var(--success);
+        }
+
+        .rate-status {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
         .info-box {
             background: rgba(0, 122, 255, 0.1);
             border: 1px solid rgba(0, 122, 255, 0.2);
@@ -435,10 +469,6 @@
             padding: 0;
         }
     </style>
-    <meta name="theme-color" content="#007AFF">
-    <meta name="mobile-web-app-capable" content="yes">
-    <link rel="manifest" href="manifest.webmanifest">
-    <link rel="apple-touch-icon" href="icon-192.png">
 </head>
 <body>
     <!-- Sync Status Bar -->
@@ -450,7 +480,7 @@
     <div class="container">
         <div class="header">
             <h1>🚗 Mileage</h1>
-            <p>Monthly Stats Reset</p>
+            <p>Monthly Fuel &amp; Mileage Tracker</p>
         </div>
 
         <!-- Month Selector -->
@@ -483,8 +513,8 @@
                         <div class="stat-value" id="monthlyLiters">0<span class="stat-unit">L</span></div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Efficiency</div>
-                        <div class="stat-value" id="monthlyEfficiency">0<span class="stat-unit">km/L</span></div>
+                        <div class="stat-label">Fuel Count</div>
+                        <div class="stat-value" id="monthlyFuelCount">0<span class="stat-unit">fills</span></div>
                     </div>
                 </div>
             </div>
@@ -494,22 +524,31 @@
             <div class="form-group">
                 <label for="entryDate">Date</label>
                 <input type="date" id="entryDate">
-                <div class="date-info">Default: Today. Change for previous records.</div>
+                <div class="date-info">Select the fuel-fill date. iPhone/Safari will show the native date picker.</div>
             </div>
 
             <div class="form-group">
-                <label for="currentKm">Odometer (KM)</label>
-                <input type="number" id="currentKm" placeholder="Current KM" inputmode="numeric">
+                <label for="currentKm">Current Odometer (KM)</label>
+                <input type="number" id="currentKm" placeholder="Enter current KM" inputmode="numeric" oninput="updateCalculations()">
             </div>
 
             <div class="form-group">
-                <label for="fuelAmount">Fuel Amount</label>
-                <input type="number" id="fuelAmount" placeholder="Amount spent" step="0.01" inputmode="decimal">
+                <label for="petrolRate">Monthly Petrol Rate (per Liter)</label>
+                <input type="number" id="petrolRate" placeholder="Enter once for this month" step="0.01" min="0.01" inputmode="decimal" oninput="updateCalculations()">
+                <div style="margin-top:8px;"><button type="button" class="btn-secondary btn-small" onclick="clearMonthlyRate()">Clear Monthly Rate</button></div>
+                <div class="rate-status" id="rateStatus">Enter the petrol rate once. It will be used for all fuel fills in this month.</div>
             </div>
 
             <div class="form-group">
-                <label for="petrolRate">Petrol Rate (per Liter)</label>
-                <input type="number" id="petrolRate" placeholder="Rate" step="0.01" inputmode="decimal">
+                <label for="fuelAmount">Fuel Amount (AED)</label>
+                <input type="number" id="fuelAmount" placeholder="Amount spent" step="0.01" min="0.01" inputmode="decimal" oninput="updateCalculations()">
+            </div>
+
+            <div class="calculation-box">
+                <div class="calculation-row"><span>Previous Odometer</span><strong id="previousKmDisplay">—</strong></div>
+                <div class="calculation-row"><span>Distance</span><strong id="calculatedDistance">0 km</strong></div>
+                <div class="calculation-row"><span>Liters Used</span><strong id="calculatedLiters">0.00 L</strong></div>
+                <div class="calculation-row"><span>Efficiency</span><strong id="calculatedEfficiency">— km/L</strong></div>
             </div>
 
             <div class="button-group">
@@ -584,8 +623,9 @@
             </div>
 
             <div class="form-group">
-                <label for="editPetrolRate">Petrol Rate</label>
-                <input type="number" id="editPetrolRate" step="0.01" inputmode="decimal">
+                <label for="editPetrolRate">Monthly Petrol Rate (per Liter)</label>
+                <input type="number" id="editPetrolRate" step="0.01" inputmode="decimal" readonly class="readonly-field">
+                <div class="rate-status">The petrol rate is controlled by the month.</div>
             </div>
 
             <div class="button-group">
@@ -606,6 +646,10 @@
             loadHistory();
             updateMonthDisplay();
             setupOnlineOfflineListeners();
+            document.getElementById('entryDate').addEventListener('change', () => {
+                updateMonthlyRateUI();
+                updateCalculations();
+            });
         });
 
         // ============================================
@@ -690,247 +734,250 @@
             return stored ? JSON.parse(stored) : [];
         }
 
+        const MONTHLY_RATES_KEY = 'monthlyPetrolRates';
+
+        function getMonthlyRates() {
+            const stored = localStorage.getItem(MONTHLY_RATES_KEY);
+            return stored ? JSON.parse(stored) : {};
+        }
+
+        function saveMonthlyRates(rates) {
+            localStorage.setItem(MONTHLY_RATES_KEY, JSON.stringify(rates));
+        }
+
+        function getMonthlyRate(monthKey) {
+            const rate = parseFloat(getMonthlyRates()[monthKey]);
+            return Number.isFinite(rate) && rate > 0 ? rate : null;
+        }
+
+        function setMonthlyRate(monthKey, rate) {
+            const rates = getMonthlyRates();
+            rates[monthKey] = Number(rate);
+            saveMonthlyRates(rates);
+        }
+
+        function getPreviousEntryForDate(dateInput, history = getHistory(), excludeIndex = -1) {
+            const target = new Date(dateInput + 'T00:00:00');
+            return history
+                .filter((entry, idx) => idx !== excludeIndex)
+                .filter(entry => parseFormattedDate(entry.Date) < target)
+                .sort((a, b) => parseFormattedDate(a.Date) - parseFormattedDate(b.Date))
+                .pop() || null;
+        }
+
+        function recalculateHistory(history) {
+            history.sort((a, b) => parseFormattedDate(a.Date) - parseFormattedDate(b.Date));
+            for (let i = 0; i < history.length; i++) {
+                const entry = history[i];
+                const previous = i > 0 ? history[i - 1] : null;
+                entry['Previous KM'] = previous ? previous['Current KM'] : 'N/A';
+                const distance = previous ? Number(entry['Current KM']) - Number(previous['Current KM']) : 0;
+                entry['Last Mileage'] = distance >= 0 ? distance : 'N/A';
+                const liters = parseFloat(entry['Liters']) || 0;
+                entry['Efficiency'] = distance > 0 && liters > 0 ? (distance / liters).toFixed(2) : 'N/A';
+            }
+            return history;
+        }
+
         function saveHistory(history) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-            if (navigator.onLine) {
-                performSync();
-            }
+            if (navigator.onLine) performSync();
         }
 
         function loadHistory() {
-            const history = getHistory();
+            const history = recalculateHistory(getHistory());
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
             const monthKey = getMonthKey(currentMonth);
-
-            // Filter records for current month
-            const monthRecords = history.filter(entry => {
-                const recordMonth = getMonthKey(parseFormattedDate(entry.Date));
-                return recordMonth === monthKey;
-            });
-
-            // Calculate monthly stats
-            let totalDistance = 0, totalSpent = 0, totalLiters = 0, count = 0;
+            const monthRecords = history.filter(entry => getMonthKey(parseFormattedDate(entry.Date)) === monthKey);
+            let totalDistance = 0, totalSpent = 0, totalLiters = 0, fuelCount = 0;
 
             monthRecords.forEach(entry => {
-                const distance = parseInt(entry['Last Mileage']) || 0;
-                const spent = parseFloat(entry['Fuel Amount']) || 0;
+                totalDistance += parseFloat(entry['Last Mileage']) || 0;
+                totalSpent += parseFloat(entry['Fuel Amount']) || 0;
                 const liters = parseFloat(entry['Liters']) || 0;
-
-                totalDistance += distance;
-                totalSpent += spent;
                 totalLiters += liters;
-                if (liters > 0) count++;
+                if (liters > 0) fuelCount++;
             });
 
-            // Display monthly stats
-            document.getElementById('monthlyDistance').innerHTML = 
-                `${totalDistance.toLocaleString()}<span class="stat-unit">km</span>`;
+            document.getElementById('monthlyDistance').innerHTML = `${totalDistance.toLocaleString()}<span class="stat-unit">km</span>`;
             document.getElementById('monthlySpent').textContent = totalSpent.toFixed(0);
-            document.getElementById('monthlyLiters').innerHTML = 
-                `${totalLiters.toFixed(1)}<span class="stat-unit">L</span>`;
-            document.getElementById('monthlyEfficiency').innerHTML = 
-                `${count > 0 ? (totalDistance / totalLiters).toFixed(1) : '0'}<span class="stat-unit">km/L</span>`;
+            document.getElementById('monthlyLiters').innerHTML = `${totalLiters.toFixed(1)}<span class="stat-unit">L</span>`;
+            document.getElementById('monthlyFuelCount').innerHTML = `${fuelCount}<span class="stat-unit">fills</span>`;
 
-            // Display history for this month
+            updateMonthlyRateUI();
+
             if (monthRecords.length > 0) {
                 document.getElementById('tabsContainer').style.display = 'block';
-
                 const historyList = document.getElementById('historyList');
-                historyList.innerHTML = monthRecords.slice().reverse().map((entry, idx) => {
+                historyList.innerHTML = monthRecords.slice().reverse().map(entry => {
                     const actualIdx = history.indexOf(entry);
-                    return `
-                        <div class="history-item">
-                            <div class="item-header">
-                                <span class="item-date">${entry.Date}</span>
-                                <span class="item-km">${entry['Current KM']} km</span>
-                            </div>
-                            <div class="item-detail">
-                                Distance: ${entry['Last Mileage']} km | Efficiency: ${entry.Efficiency || '-'} km/L
-                            </div>
-                            <div class="item-actions">
-                                <button class="btn-secondary btn-small" onclick="openEditModal(${actualIdx})">Edit</button>
-                                <button class="btn-danger btn-small" onclick="deleteRecord(${actualIdx})">Delete</button>
-                            </div>
-                        </div>
-                    `;
+                    return `<div class="history-item">
+                        <div class="item-header"><span class="item-date">${entry.Date}</span><span class="item-km">${entry['Current KM']} km</span></div>
+                        <div class="item-detail">Distance: ${entry['Last Mileage'] ?? 0} km | Fuel: AED ${parseFloat(entry['Fuel Amount'] || 0).toFixed(2)} | Rate: AED ${parseFloat(entry['Petrol Rate'] || 0).toFixed(2)}/L | ${entry.Efficiency && entry.Efficiency !== 'N/A' ? entry.Efficiency : '-'} km/L</div>
+                        <div class="item-actions"><button class="btn-secondary btn-small" onclick="openEditModal(${actualIdx})">Edit</button><button class="btn-danger btn-small" onclick="deleteRecord(${actualIdx})">Delete</button></div>
+                    </div>`;
                 }).join('');
             } else {
                 document.getElementById('tabsContainer').style.display = 'none';
             }
+            updateCalculations();
+        }
+
+        function clearMonthlyRate() {
+            const monthKey = getSelectedMonthKey();
+            const rates = getMonthlyRates();
+            if (!rates[monthKey]) {
+                document.getElementById('petrolRate').value = '';
+                document.getElementById('petrolRate').readOnly = false;
+                document.getElementById('petrolRate').classList.remove('readonly-field');
+                document.getElementById('rateStatus').textContent =
+                    'No monthly rate is saved. Enter the correct rate for this month.';
+                updateCalculations();
+                return;
+            }
+            if (!confirm(`Clear the saved petrol rate for ${monthKey}? You can enter the correct rate again.`)) return;
+            delete rates[monthKey];
+            saveMonthlyRates(rates);
+            const rateInput = document.getElementById('petrolRate');
+            rateInput.value = '';
+            rateInput.readOnly = false;
+            rateInput.classList.remove('readonly-field');
+            document.getElementById('rateStatus').textContent =
+                'Monthly rate cleared. Enter the correct rate for this month.';
+            updateCalculations();
+            showAlert('✓ Monthly petrol rate cleared. Enter the correct rate.', 'success');
+        }
+
+        function updateMonthlyRateUI() {
+            const dateInput = document.getElementById('entryDate').value;
+            const monthKey = getMonthKey(dateInput || new Date());
+            const rate = getMonthlyRate(monthKey);
+            const input = document.getElementById('petrolRate');
+            const status = document.getElementById('rateStatus');
+            if (rate) {
+                input.value = rate;
+                input.readOnly = true;
+                input.classList.add('readonly-field');
+                status.textContent = `Monthly rate saved: AED ${rate.toFixed(2)}/L. It will be reused for all fills in ${monthKey}.`;
+            } else {
+                input.value = '';
+                input.readOnly = false;
+                input.classList.remove('readonly-field');
+                status.textContent = 'Enter the petrol rate once. It will be used for all fuel fills in this month.';
+            }
+        }
+
+        function updateCalculations() {
+            const dateInput = document.getElementById('entryDate').value;
+            if (!dateInput) return;
+            const currentKm = parseFloat(document.getElementById('currentKm').value);
+            const fuelAmount = parseFloat(document.getElementById('fuelAmount').value);
+            const rate = getMonthlyRate(getMonthKey(dateInput)) || parseFloat(document.getElementById('petrolRate').value);
+            const previous = getPreviousEntryForDate(dateInput, getHistory());
+            const previousKm = previous ? Number(previous['Current KM']) : null;
+            let distance = previousKm !== null && Number.isFinite(currentKm) ? currentKm - previousKm : 0;
+            if (distance < 0) distance = 0;
+            const liters = Number.isFinite(fuelAmount) && fuelAmount > 0 && Number.isFinite(rate) && rate > 0 ? fuelAmount / rate : 0;
+            const efficiency = distance > 0 && liters > 0 ? distance / liters : 0;
+            document.getElementById('previousKmDisplay').textContent = previousKm !== null ? `${previousKm.toLocaleString()} km` : 'First record';
+            document.getElementById('calculatedDistance').textContent = `${distance.toLocaleString()} km`;
+            document.getElementById('calculatedLiters').textContent = `${liters.toFixed(2)} L`;
+            document.getElementById('calculatedEfficiency').textContent = efficiency > 0 ? `${efficiency.toFixed(2)} km/L` : '— km/L';
         }
 
         function submitReading() {
             const dateInput = document.getElementById('entryDate').value;
-            const currentKm = parseInt(document.getElementById('currentKm').value);
+            const currentKm = parseFloat(document.getElementById('currentKm').value);
             const fuelAmount = parseFloat(document.getElementById('fuelAmount').value);
-            const petrolRate = parseFloat(document.getElementById('petrolRate').value);
-
-            if (!dateInput || !currentKm || !fuelAmount || !petrolRate) {
-                showAlert('Please fill all fields.', 'error');
-                return;
+            const enteredRate = parseFloat(document.getElementById('petrolRate').value);
+            if (!dateInput || !Number.isFinite(currentKm) || currentKm < 0 || !Number.isFinite(fuelAmount) || fuelAmount <= 0) {
+                showAlert('Please enter the date, current odometer and fuel amount.', 'error'); return;
             }
-
             const history = getHistory();
             const entryDate = formatDate(dateInput);
-
-            // Check if entry already exists
-            const existingIndex = history.findIndex(entry => entry.Date === entryDate);
-            if (existingIndex !== -1) {
-                showAlert(`Entry already exists for ${entryDate}.`, 'warning');
-                return;
+            const monthKey = getMonthKey(dateInput);
+            if (history.some(entry => entry.Date === entryDate)) {
+                showAlert(`Entry already exists for ${entryDate}.`, 'warning'); return;
             }
-
-            let previousKm = 'N/A';
-            let lastMileage = 'N/A';
-            let efficiency = 'N/A';
-
-            const previousEntries = history.filter(entry => {
-                const entryDateObj = parseFormattedDate(entry.Date);
-                return entryDateObj < new Date(dateInput);
-            });
-
-            if (previousEntries.length > 0) {
-                const lastPreviousEntry = previousEntries[previousEntries.length - 1];
-                previousKm = lastPreviousEntry['Current KM'];
-
-                if (currentKm < previousKm) {
-                    showAlert('KM is lower than previous reading.', 'warning');
-                    return;
+            let monthlyRate = getMonthlyRate(monthKey);
+            if (!monthlyRate) {
+                if (!Number.isFinite(enteredRate) || enteredRate <= 0) {
+                    showAlert('Please enter the petrol rate for this month. It will be saved and reused for the rest of the month.', 'error'); return;
                 }
-
-                lastMileage = currentKm - previousKm;
-                const liters = fuelAmount / petrolRate;
-                if (lastMileage > 0 && liters > 0) {
-                    efficiency = (lastMileage / liters).toFixed(2);
-                }
+                monthlyRate = enteredRate;
+                setMonthlyRate(monthKey, monthlyRate);
             }
-
-            const newEntry = {
-                'Date': entryDate,
-                'Current KM': currentKm,
-                'Previous KM': previousKm,
-                'Last Mileage': lastMileage === 'N/A' ? 'N/A' : lastMileage,
-                'Fuel Amount': fuelAmount,
-                'Petrol Rate': petrolRate,
-                'Liters': (fuelAmount / petrolRate).toFixed(2),
-                'Efficiency': efficiency,
-                'createdAt': new Date().toISOString()
-            };
-
-            history.push(newEntry);
-            history.sort((a, b) => parseFormattedDate(a.Date) - parseFormattedDate(b.Date));
+            const previous = getPreviousEntryForDate(dateInput, history);
+            const previousKm = previous ? Number(previous['Current KM']) : null;
+            if (previousKm !== null && currentKm < previousKm) {
+                showAlert(`Current KM (${currentKm}) is lower than the previous reading (${previousKm}).`, 'warning'); return;
+            }
+            const distance = previousKm !== null ? currentKm - previousKm : 0;
+            const liters = fuelAmount / monthlyRate;
+            const efficiency = distance > 0 && liters > 0 ? (distance / liters).toFixed(2) : 'N/A';
+            history.push({'Date': entryDate, 'Current KM': currentKm, 'Previous KM': previousKm !== null ? previousKm : 'N/A', 'Last Mileage': distance, 'Fuel Amount': fuelAmount, 'Petrol Rate': monthlyRate, 'Liters': liters.toFixed(2), 'Efficiency': efficiency, 'createdAt': new Date().toISOString()});
+            recalculateHistory(history);
             saveHistory(history);
-
-            clearForm();
-            loadHistory();
-            showAlert('✓ Record saved!', 'success');
+            clearForm(); loadHistory(); showAlert('✓ Record saved! Distance, liters and efficiency calculated automatically.', 'success');
         }
 
         function openEditModal(idx) {
             editingIndex = idx;
             const history = getHistory();
             const entry = history[idx];
-
-            const dateStr = entry.Date;
-            const [day, month, year] = dateStr.split('/');
+            const [day, month, year] = entry.Date.split('/');
             document.getElementById('editDate').value = `${year}-${month}-${day}`;
             document.getElementById('editKm').value = entry['Current KM'];
             document.getElementById('editFuelAmount').value = entry['Fuel Amount'];
-            document.getElementById('editPetrolRate').value = entry['Petrol Rate'];
-
+            document.getElementById('editPetrolRate').value = entry['Petrol Rate'] || getMonthlyRate(`${year}-${month}`) || '';
             document.getElementById('editModal').classList.add('show');
         }
 
         function saveEdit() {
             const dateInput = document.getElementById('editDate').value;
-            const km = parseInt(document.getElementById('editKm').value);
+            const km = parseFloat(document.getElementById('editKm').value);
             const fuel = parseFloat(document.getElementById('editFuelAmount').value);
-            const rate = parseFloat(document.getElementById('editPetrolRate').value);
-
-            if (!km || !fuel || !rate) {
-                showAlert('Please fill all fields.', 'error');
-                return;
+            if (!dateInput || !Number.isFinite(km) || km < 0 || !Number.isFinite(fuel) || fuel <= 0) {
+                showAlert('Please enter a valid date, odometer reading and fuel amount.', 'error'); return;
             }
-
             const history = getHistory();
-            const liters = fuel / rate;
-            history[editingIndex]['Current KM'] = km;
-            history[editingIndex]['Fuel Amount'] = fuel;
-            history[editingIndex]['Petrol Rate'] = rate;
-            history[editingIndex]['Liters'] = liters.toFixed(2);
-            history[editingIndex]['Date'] = formatDate(dateInput);
-
-            // Recalculate from this entry onwards
-            for (let i = editingIndex; i < history.length; i++) {
-                if (i === 0) {
-                    history[i]['Previous KM'] = 'N/A';
-                    history[i]['Last Mileage'] = 'N/A';
-                    history[i]['Efficiency'] = 'N/A';
-                } else {
-                    const prev = history[i - 1];
-                    history[i]['Previous KM'] = prev['Current KM'];
-                    history[i]['Last Mileage'] = history[i]['Current KM'] - prev['Current KM'];
-                    
-                    if (history[i]['Liters'] > 0) {
-                        history[i]['Efficiency'] = (history[i]['Last Mileage'] / history[i]['Liters']).toFixed(2);
-                    }
-                }
+            const entry = history[editingIndex];
+            const newMonthKey = getMonthKey(dateInput);
+            let rate = getMonthlyRate(newMonthKey);
+            if (!rate) {
+                rate = parseFloat(entry['Petrol Rate']);
+                if (Number.isFinite(rate) && rate > 0) setMonthlyRate(newMonthKey, rate);
+                else { showAlert('Please set the petrol rate for this month first.', 'error'); return; }
             }
-
-            history.sort((a, b) => parseFormattedDate(a.Date) - parseFormattedDate(b.Date));
-            saveHistory(history);
-
-            closeEditModal();
-            loadHistory();
-            showAlert('✓ Record updated!', 'success');
+            entry['Current KM'] = km;
+            entry['Fuel Amount'] = fuel;
+            entry['Petrol Rate'] = rate;
+            entry['Liters'] = (fuel / rate).toFixed(2);
+            entry['Date'] = formatDate(dateInput);
+            if (history.some((e, i) => i !== editingIndex && e.Date === entry.Date)) { showAlert('Another record already exists for this date.', 'warning'); return; }
+            recalculateHistory(history);
+            saveHistory(history); closeEditModal(); loadHistory(); showAlert('✓ Record updated and calculations recalculated.', 'success');
         }
 
-        function closeEditModal() {
-            document.getElementById('editModal').classList.remove('show');
-            editingIndex = -1;
-        }
+        function closeEditModal() { document.getElementById('editModal').classList.remove('show'); editingIndex = -1; }
 
         function deleteRecord(idx) {
             if (!confirm('Delete this record?')) return;
-
-            const history = getHistory();
-            history.splice(idx, 1);
-            
-            if (history.length > 0) {
-                // Recalculate
-                for (let i = idx < history.length ? idx : 0; i < history.length; i++) {
-                    if (i === 0) {
-                        history[i]['Previous KM'] = 'N/A';
-                        history[i]['Last Mileage'] = 'N/A';
-                        history[i]['Efficiency'] = 'N/A';
-                    } else {
-                        const prev = history[i - 1];
-                        history[i]['Previous KM'] = prev['Current KM'];
-                        history[i]['Last Mileage'] = history[i]['Current KM'] - prev['Current KM'];
-                        
-                        if (history[i]['Liters'] > 0) {
-                            history[i]['Efficiency'] = (history[i]['Last Mileage'] / history[i]['Liters']).toFixed(2);
-                        }
-                    }
-                }
-            }
-            
-            saveHistory(history);
-            loadHistory();
-            showAlert('✓ Record deleted!', 'success');
+            const history = getHistory(); history.splice(idx, 1); recalculateHistory(history); saveHistory(history); loadHistory();
+            showAlert('✓ Record deleted and calculations recalculated.', 'success');
         }
 
         function clearForm() {
-            setDefaultDate();
-            document.getElementById('currentKm').value = '';
-            document.getElementById('fuelAmount').value = '';
-            document.getElementById('petrolRate').value = '';
+            setDefaultDate(); document.getElementById('currentKm').value = ''; document.getElementById('fuelAmount').value = '';
+            updateMonthlyRateUI(); updateCalculations();
         }
 
         function exportBackup() {
             const history = getHistory();
             const backup = {
-                version: 1,
+                version: 2,
                 exportedAt: new Date().toISOString(),
+                monthlyPetrolRates: getMonthlyRates(),
                 data: history
             };
 
@@ -956,6 +1003,10 @@
                 try {
                     const backup = JSON.parse(e.target.result);
                     const history = backup.data || [];
+                    if (backup.monthlyPetrolRates && typeof backup.monthlyPetrolRates === 'object') {
+                        saveMonthlyRates(backup.monthlyPetrolRates);
+                    }
+                    recalculateHistory(history);
                     saveHistory(history);
                     loadHistory();
                     showAlert(`✓ Restored ${history.length} records!`, 'success');
@@ -1024,10 +1075,6 @@
                 document.getElementById('syncUrl').value = settings.syncUrl;
             }
         });
-            if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-            window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
-        }
-
     </script>
 </body>
 </html>
